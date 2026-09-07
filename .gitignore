@@ -9,4 +9,30 @@ wheels/
 # Virtual environments
 .venv
 
+# Environment & secrets
 .env
+.env.*
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Uploaded files (user avatars)
+static/avatars/
+
+# Test & cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# OS
+.DS_Store
+Thumbs.db

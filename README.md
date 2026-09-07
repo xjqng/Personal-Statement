@@ -26,7 +26,7 @@ Personal Statement/
     ├── crud/               # 数据访问层（仅数据库操作）
     ├── schemas/            # Pydantic 模型（请求/响应）
     ├── models/             # SQLAlchemy ORM 模型
-    ├── core/               # 通用模块（config/security/logger/xxs）
+    ├── core/               # 通用模块（config/security/logger/xss/upload）
     └── db/                 # 引擎与 session 工厂
 ```
 
@@ -86,12 +86,13 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ## 安全特性
 
 - **密码**：bcrypt 加盐哈希
-- **JWT**：access / refresh 双 token，type 字段防混用
-- **越权防护**：日记 / 目标的修改、删除均校验 `user_id` 归属
+- **JWT**：access / refresh 双 token
+- **归属校验**：日记 / 目标的查询、修改、删除均校验 `user_id` 归属
 - **XSS 防护**：
-  - 标题等纯文本 → `bleach.clean(strip=False)` 全转义
-  - 日记正文等富文本 → 白名单标签（`p / b / a / ul ...`），过滤 `javascript:` 伪协议
+  - 纯文本字段 → `bleach.clean(strip=False)` 全转义
+  - 富文本字段 → 白名单标签（`p / b / a / ul ...`），过滤 `javascript:` 伪协议
   - **入库前清洗**，存储型 XSS 在落库时即被拦截
+- **文件上传**：类型与大小校验 + UUID 重命名，防路径遍历
 
 ## 开发约定
 
