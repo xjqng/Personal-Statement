@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>自白书 · Personal Statement</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: #f5f5f7; color: #1d1d1f; padding: 20px; font-size: 14px; }
+  h1 { font-size: 22px; margin-bottom: 16px; }
+  h2 { font-size: 16px; margin: 16px 0 8px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  input, textarea, select, button { font-family: inherit; font-size: 14px; }
+  input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid #d2d2d7; border-radius: 6px; margin-bottom: 8px; }
+  textarea { min-height: 80px; resize: vertical; }
+  button { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; background: #0071e3; color: #fff; margin-right: 6px; }
+  button:hover { background: #0077ed; }
+  button.danger { background: #d70015; }
+  button.danger:hover { background: #ff1a2d; }
+  button.ghost { background: #e8e8ed; color: #1d1d1f; }
+  button.ghost:hover { background: #dcdce1; }
+  button.small { padding: 4px 8px; font-size: 12px; }
+  .nav { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #d2d2d7; padding-bottom: 12px; }
+  .nav button { background: transparent; color: #0071e3; padding: 6px 12px; }
+  .nav button.active { background: #0071e3; color: #fff; }
+  .item { border: 1px solid #e8e8ed; border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+  .item .title { font-weight: 600; margin-bottom: 4px; }
+  .item .meta { color: #86867b; font-size: 12px; margin-bottom: 8px; }
+  .item .actions { margin-top: 8px; }
+  .item .content { white-space: pre-wrap; margin: 8px 0; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #e8e8ed; margin-right: 4px; }
+  .badge.status-未开始 { background: #e8e8ed; color: #555; }
+  .badge.status-进行中 { background: #fff3cd; color: #856404; }
+  .badge.status-已完成 { background: #d4edda; color: #155724; }
+  .badge.status-已取消 { background: #f8d7da; color: #721c24; }
+  .empty { color: #86867b; padding: 20px; text-align: center; }
+  .modal-bg { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal { background:#fff; border-radius:8px; padding:20px; width: 480px; max-width: 92vw; max-height: 88vh; overflow:auto; }
+  .modal h2 { margin-top: 0; }
+  .toast { position: fixed; top: 20px; right: 20px; background: #d70015; color: #fff; padding: 10px 14px; border-radius: 6px; z-index: 200; transition: opacity 0.3s; }
+  .toast.ok { background: #155724; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #d2d2d7; }
+  .avatar-large { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; border: 3px solid #d2d2d7; display: block; margin-bottom: 12px; }
+  .avatar-nav { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 1px solid #d2d2d7; vertical-align: middle; margin-right: 4px; }
+  .avatar-placeholder { width: 96px; height: 96px; border-radius: 50%; background: #e8e8ed; display: flex; align-items: center; justify-content: center; font-size: 36px; color: #86867b; margin-bottom: 12px; }
+  .avatar-preview { max-width: 120px; max-height: 120px; border-radius: 50%; margin-top: 8px; border: 2px solid #d2d2d7; }
+  .file-input { display: none; }
+  label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<div id="toast"></div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+let currentView = "diary";
+
+function get(k) { return localStorage.getItem(k); }
+function set(k, v) { localStorage.setItem(k, v); }
+function del(k) { localStorage.removeItem(k); }
+
+function toast(msg, ok) {
+  ok = ok || false;
+  const el = document.getElementById("toast");
+  if (!el) { alert(msg); return; }
+  el.textContent = msg;
+  el.className = "toast" + (ok ? " ok" : "");
+  el.style.opacity = "1";
+  setTimeout(function() { el.className = ""; el.textContent = ""; el.style.opacity = "0"; }, 2500);
+}
+
+async function request(path, options) {
+  options = options || {};
+  const opts = { method: options.method || "GET", headers: {} };
+  if (options.body !== undefined) {
+    if (options.body instanceof FormData) {
+      opts.body = options.body;
+    } else {
+      opts.headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(options.body);
+    }
+  }
+  const token = get("access_token");
+  if (token) opts.headers["Authorization"] = "Bearer " + token;
+
+  let res = await fetch(API + path, opts);
+
+  if (res.status === 401 && get("refresh_token") && !options._retried) {
+    const refreshed = await refreshToken();
+    if (refreshed) {
+      options._retried = true;
+      return request(path, options);
+    } else {
+      logout();
+      throw new Error("登录已过期，请重新登录");
+    }
+  }
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const data = await res.json();
+      detail = data.detail || JSON.stringify(data);
+    } catch (e) {}
+    throw new Error(detail);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function refreshToken() {
+  try {
+    const res = await fetch(API + "/auth/refresh", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({refresh_token: get("refresh_token")})
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    set("access_token", data.access_token);
+    return true;
+  } catch (e) { return false; }
+}
+
+function logout() {
+  del("access_token");
+  del("refresh_token");
+  del("username");
+  del("avatar");
+  render();
+}
+
+function fmtDate(s) {
+  if (!s) return "";
+  const d = new Date(s);
+  return d.toLocaleString("zh-CN", {year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"});
+}
+
+function toFullUrl(path) {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  return API + path;
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/[&<>"']/g, function(c) { return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; });
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+function isLoggedIn() { return !!get("access_token"); }
+
+function render() {
+  const app = document.getElementById("app");
+  if (!isLoggedIn()) {
+    app.innerHTML = renderLogin();
+  } else {
+    app.innerHTML = renderMain();
+    loadCurrentView();
+  }
+}
+
+function renderLogin() {
+  return `
+    <h1>自白书 · Personal Statement</h1>
+    <div class="card">
+      <h2>登录</h2>
+      <label>用户名</label>
+      <input id="login-username" placeholder="用户名">
+      <label>密码</label>
+      <input id="login-password" type="password" placeholder="密码">
+      <button onclick="doLogin()">登录</button>
+      <button class="ghost" onclick="showRegister()">没有账号？去注册</button>
+    </div>
+    <div id="register-modal"></div>
+  `;
+}
+
+function showRegister() {
+  document.getElementById("register-modal").innerHTML = `
+    <div class="modal-bg">
+      <div class="modal">
+        <h2>注册新账号</h2>
+        <label>用户名（3-50字符）</label>
+        <input id="reg-username" placeholder="用户名">
+        <label>邮箱</label>
+        <input id="reg-email" type="email" placeholder="email@example.com">
+        <label>密码</label>
+        <input id="reg-password" type="password" placeholder="密码">
+        <button onclick="doRegister()">注册</button>
+        <button class="ghost" onclick="closeReg()">取消</button>
+      </div>
+    </div>
+  `;
+}
+function closeReg() { document.getElementById("register-modal").innerHTML = ""; }
+
+async function doLogin() {
+  const username = document.getElementById("login-username").value.trim();
+  const password = document.getElementById("login-password").value;
+  if (!username || !password) { toast("请输入用户名和密码"); return; }
+  try {
+    const form = new FormData();
+    form.append("username", username);
+    form.append("password", password);
+    const res = await fetch(API + "/auth/login", { method: "POST", body: form });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.detail || "登录失败");
+    }
+    const data = await res.json();
+    set("access_token", data.access_token);
+    set("refresh_token", data.refresh_token);
+    set("username", username);
+    set("avatar", "");
+    toast("登录成功", true);
+    // 登录后尝试加载头像
+    try {
+      const profile = await request("/profile/");
+      if (profile.headshot) set("avatar", toFullUrl(profile.headshot));
+    } catch (e) {}
+    render();
+  } catch (e) { toast(e.message); }
+}
+
+async function doRegister() {
+  const username = document.getElementById("reg-username").value.trim();
+  const email = document.getElementById("reg-email").value.trim();
+  const password = document.getElementById("reg-password").value;
+  if (!username || !email || !password) { toast("请填写完整"); return; }
+  try {
+    const res = await fetch(API + "/auth/register", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({username: username, email: email, password: password})
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.detail || "注册失败");
+    }
+    const data = await res.json();
+    set("access_token", data.access_token);
+    set("refresh_token", data.refresh_token);
+    set("username", username);
+    set("avatar", "");
+    toast("注册成功", true);
+    render();
+  } catch (e) { toast(e.message); }
+}
+
+function renderMain() {
+  const u = get("username") || "";
+  const avatar = get("avatar") || "";
+  const avatarHtml = avatar
+    ? `<img src="${avatar}" class="avatar-nav" alt="avatar" onerror="this.style.display='none'">`
+    : `<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:#e8e8ed;text-align:center;line-height:28px;font-size:14px;color:#86867b;margin-right:4px;vertical-align:middle;">${u.charAt(0).toUpperCase()}</span>`;
+  const navDiary = currentView === 'diary' ? 'active' : '';
+  const navGoal = currentView === 'goal' ? 'active' : '';
+  const navProfile = currentView === 'profile' ? 'active' : '';
+  return `
+    <div class="nav">
+      <span style="flex:1; font-weight:600; padding-top:6px;">${avatarHtml}自白书 · ${u}</span>
+      <button onclick="switchView('diary')" class="${navDiary}">日记</button>
+      <button onclick="switchView('goal')" class="${navGoal}">目标</button>
+      <button onclick="switchView('profile')" class="${navProfile}">资料</button>
+      <button class="ghost" onclick="logout()">退出</button>
+    </div>
+    <div id="view"></div>
+    <div id="modal-root"></div>
+  `;
+}
+
+function switchView(v) {
+  currentView = v;
+  render();
+}
+
+function loadCurrentView() {
+  if (currentView === "diary") loadDiaries();
+  else if (currentView === "goal") loadGoals();
+  else if (currentView === "profile") loadProfile();
+}
+
+// ============ 日记 ============
+function loadDiaries() {
+  const view = document.getElementById("view");
+  view.innerHTML = '<h2>我的日记</h2><button onclick="showDiaryForm(null)">写新日记</button><div id="diary-list">加载中...</div>';
+  request("/diary/?skip=0&limit=100").then(function(list) {
+    const root = document.getElementById("diary-list");
+    if (!list || !list.length) {
+      root.innerHTML = '<div class="empty">还没有日记，写一篇吧</div>';
+      return;
+    }
+    root.innerHTML = list.map(function(d) {
+      const updated = d.updated_at && d.updated_at !== d.created_at ? ' · 更新于 ' + fmtDate(d.updated_at) : '';
+      return `
+        <div class="item">
+          <div class="title">${escapeHtml(d.title)}</div>
+          <div class="meta">${fmtDate(d.created_at)}${updated}</div>
+          <div class="content">${escapeHtml(d.content)}</div>
+          <div class="actions">
+            <button class="small" onclick='showDiaryForm(${JSON.stringify({id:d.id,title:d.title,content:d.content}).replace(/'/g,"&#39;")})'>编辑</button>
+            <button class="small danger" onclick="deleteDiary(${d.id})">删除</button>
+            <button class="small ghost" onclick="toggleComments('diary', ${d.id})">评论</button>
+          </div>
+          <div id="comments-diary-${d.id}"></div>
+        </div>
+      `;
+    }).join("");
+  }).catch(function(e) {
+    view.innerHTML = '<div class="empty">加载失败：' + e.message + '</div>';
+  });
+}
+
+function showDiaryForm(data) {
+  var isEdit = !!(data && data.id);
+  var title = isEdit ? data.title : "";
+  var content = isEdit ? data.content : "";
+  var idStr = isEdit ? String(data.id) : "null";
+  document.getElementById("modal-root").innerHTML = `
+    <div class="modal-bg">
+      <div class="modal">
+        <h2>${isEdit ? "编辑日记" : "写新日记"}</h2>
+        <label>标题</label>
+        <input id="f-title" value="${escapeAttr(title)}">
+        <label>内容</label>
+        <textarea id="f-content">${escapeHtml(content)}</textarea>
+        <button onclick="saveDiary(${idStr})">${isEdit ? "保存修改" : "发布"}</button>
+        <button class="ghost" onclick="closeModal()">取消</button>
+      </div>
+    </div>
+  `;
+}
+
+function closeModal() { document.getElementById("modal-root").innerHTML = ""; }
+
+async function saveDiary(id) {
+  var title = document.getElementById("f-title").value.trim();
+  var content = document.getElementById("f-content").value;
+  if (!title || !content) { toast("标题和内容必填"); return; }
+  try {
+    if (id) {
+      await request("/diary/" + id, {method: "PUT", body: {title: title, content: content}});
+      toast("修改成功", true);
+    } else {
+      await request("/diary/", {method: "POST", body: {title: title, content: content}});
+      toast("发布成功", true);
+    }
+    closeModal();
+    loadDiaries();
+  } catch (e) { toast(e.message); }
+}
+
+async function deleteDiary(id) {
+  if (!confirm("确定删除这篇日记？")) return;
+  try {
+    await request("/diary/" + id, {method: "DELETE"});
+    toast("删除成功", true);
+    loadDiaries();
+  } catch (e) { toast(e.message); }
+}
+
+// ============ 目标 ============
+function loadGoals() {
+  const view = document.getElementById("view");
+  view.innerHTML = '<h2>我的目标</h2><button onclick="showGoalForm(null)">新建目标</button><div id="goal-list">加载中...</div>';
+  request("/goal/?skip=0&limit=100").then(function(list) {
+    const root = document.getElementById("goal-list");
+    if (!list || !list.length) {
+      root.innerHTML = '<div class="empty">还没有目标，立一个吧</div>';
+      return;
+    }
+    root.innerHTML = list.map(function(g) {
+      var start = g.start_date ? "开始: " + fmtDate(g.start_date) : "未开始";
+      var end = g.end_date ? " · 截止: " + fmtDate(g.end_date) : "";
+      var desc = g.description ? '<div class="content">' + escapeHtml(g.description) + '</div>' : '';
+      return `
+        <div class="item">
+          <div class="title">${escapeHtml(g.title)} <span class="badge status-${g.status}">${g.status}</span></div>
+          <div class="meta">${start}${end}</div>
+          ${desc}
+          <div class="actions">
+            <button class="small" onclick='showGoalForm(${JSON.stringify({id:g.id,title:g.title,description:g.description,status:g.status,start_date:g.start_date,end_date:g.end_date}).replace(/'/g,"&#39;")})'>编辑</button>
+            <button class="small danger" onclick="deleteGoal(${g.id})">删除</button>
+            <button class="small ghost" onclick="toggleComments('goal', ${g.id})">评论</button>
+          </div>
+          <div id="comments-goal-${g.id}"></div>
+        </div>
+      `;
+    }).join("");
+  }).catch(function(e) {
+    view.innerHTML = '<div class="empty">加载失败：' + e.message + '</div>';
+  });
+}
+
+function showGoalForm(data) {
+  var isEdit = !!(data && data.id);
+  var g = data || {title:"", description:"", status:"未开始", start_date:"", end_date:""};
+  var idStr = isEdit ? String(data.id) : "null";
+  var sd = g.start_date ? g.start_date.substring(0,10) : "";
+  var ed = g.end_date ? g.end_date.substring(0,10) : "";
+  var statusOpts = ["未开始","进行中","已完成","已取消"].map(function(s) {
+    return '<option' + (g.status===s?' selected':'') + '>' + s + '</option>';
+  }).join("");
+  document.getElementById("modal-root").innerHTML = `
+    <div class="modal-bg">
+      <div class="modal">
+        <h2>${isEdit ? "编辑目标" : "新建目标"}</h2>
+        <label>标题</label>
+        <input id="g-title" value="${escapeAttr(g.title)}">
+        <label>描述</label>
+        <textarea id="g-desc">${escapeHtml(g.description || "")}</textarea>
+        <label>状态</label>
+        <select id="g-status">${statusOpts}</select>
+        <div class="row">
+          <div>
+            <label>开始日期</label>
+            <input id="g-start" type="date" value="${sd}">
+          </div>
+          <div>
+            <label>结束日期</label>
+            <input id="g-end" type="date" value="${ed}">
+          </div>
+        </div>
+        <button onclick="saveGoal(${idStr})">${isEdit ? "保存修改" : "创建"}</button>
+        <button class="ghost" onclick="closeModal()">取消</button>
+      </div>
+    </div>
+  `;
+}
+
+async function saveGoal(id) {
+  var title = document.getElementById("g-title").value.trim();
+  var description = document.getElementById("g-desc").value;
+  var status = document.getElementById("g-status").value;
+  var sd = document.getElementById("g-start").value;
+  var ed = document.getElementById("g-end").value;
+  if (!title) { toast("标题必填"); return; }
+  var body = {
+    title: title, description: description, status: status,
+    start_date: sd ? new Date(sd + "T00:00:00Z").toISOString() : null,
+    end_date: ed ? new Date(ed + "T00:00:00Z").toISOString() : null
+  };
+  try {
+    if (id) {
+      await request("/goal/" + id, {method: "PUT", body: body});
+      toast("修改成功", true);
+    } else {
+      await request("/goal/", {method: "POST", body: body});
+      toast("创建成功", true);
+    }
+    closeModal();
+    loadGoals();
+  } catch (e) { toast(e.message); }
+}
+
+async function deleteGoal(id) {
+  if (!confirm("确定删除这个目标？")) return;
+  try {
+    await request("/goal/" + id, {method: "DELETE"});
+    toast("删除成功", true);
+    loadGoals();
+  } catch (e) { toast(e.message); }
+}
+
+// ============ 个人资料 ============
+function loadProfile() {
+  const view = document.getElementById("view");
+  view.innerHTML = '<h2>个人资料</h2><div id="profile-box">加载中...</div>';
+  request("/profile/").then(function(p) {
+    if (p.headshot) set("avatar", toFullUrl(p.headshot));
+    refreshNavAvatar();
+    const avatarImg = p.headshot
+      ? `<img src="${toFullUrl(p.headshot)}" class="avatar-large" alt="avatar">`
+      : `<div class="avatar-placeholder">👤</div>`;
+    document.getElementById("profile-box").innerHTML = `
+      <div class="item">
+        ${avatarImg}
+        <div class="title">${escapeHtml(p.name || "(未填写名称)")}</div>
+        <div class="meta">ID: ${p.id}${p.age !== null ? ' · 年龄: ' + p.age : ''}</div>
+        <div class="actions">
+          <button class="small" onclick='showProfileForm(${JSON.stringify({id:p.id,name:p.name,age:p.age,headshot:p.headshot}).replace(/'/g,"&#39;")})'>编辑</button>
+          <button class="small" onclick="uploadAvatar()">上传头像</button>
+        </div>
+      </div>
+    `;
+  }).catch(function(e) {
+    document.getElementById("profile-box").innerHTML = `
+      <div class="empty">${e.message}</div>
+      <button onclick="showProfileForm(null)">创建个人资料</button>
+    `;
+  });
+}
+
+function refreshNavAvatar() {
+  const avatar = get("avatar") || "";
+  const u = get("username") || "";
+  const avatarHtml = avatar
+    ? `<img src="${avatar}" class="avatar-nav" alt="avatar" onerror="this.style.display='none'">`
+    : `<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:#e8e8ed;text-align:center;line-height:28px;font-size:14px;color:#86867b;margin-right:4px;vertical-align:middle;">${u.charAt(0).toUpperCase()}</span>`;
+  const navSpan = document.querySelector('.nav span');
+  if (navSpan) {
+    navSpan.innerHTML = `${avatarHtml}自白书 · ${u}`;
+  }
+}
+
+function uploadAvatar() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/gif,image/webp';
+  input.onchange = function() {
+    if (!input.files || !input.files.length) return;
+    const file = input.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+      toast("图片大小不能超过5MB");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    fetch(API + "/profile/avatar", {
+      method: "POST",
+      headers: {"Authorization": "Bearer " + get("access_token")},
+      body: formData
+    }).then(function(res) {
+      if (!res.ok) {
+        return res.json().then(function(d) { throw new Error(d.detail || "上传失败"); });
+      }
+      return res.json();
+    }).then(function(data) {
+      if (data.headshot) set("avatar", toFullUrl(data.headshot));
+      toast("头像上传成功", true);
+      loadProfile();
+    }).catch(function(e) { toast(e.message); });
+  };
+  input.click();
+}
+
+function showProfileForm(data) {
+  var isEdit = !!(data && data.id);
+  var p = data || {headshot:"", name:"", age:""};
+  var avatarSrc = p.headshot ? toFullUrl(p.headshot) : "";
+  document.getElementById("modal-root").innerHTML = `
+    <div class="modal-bg">
+      <div class="modal">
+        <h2>${isEdit ? "编辑资料" : "创建资料"}</h2>
+        <label>名称</label>
+        <input id="p-name" value="${escapeAttr(p.name || "")}">
+        <label>年龄</label>
+        <input id="p-age" type="number" value="${p.age !== null && p.age !== undefined ? p.age : ''}">
+        ${avatarSrc ? `<img src="${avatarSrc}" class="avatar-preview" alt="current avatar"><br>` : ''}
+        <button class="small" onclick="uploadAvatarDirect()">${avatarSrc ? '更换头像' : '上传头像'}</button>
+        <button onclick="saveProfile(${isEdit ? 'true' : 'false'})">${isEdit ? "保存" : "创建"}</button>
+        <button class="ghost" onclick="closeModal()">取消</button>
+      </div>
+    </div>
+  `;
+}
+
+function uploadAvatarDirect() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/gif,image/webp';
+  input.onchange = function() {
+    if (!input.files || !input.files.length) return;
+    const file = input.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+      toast("图片大小不能超过5MB");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    fetch(API + "/profile/avatar", {
+      method: "POST",
+      headers: {"Authorization": "Bearer " + get("access_token")},
+      body: formData
+    }).then(function(res) {
+      if (!res.ok) {
+        return res.json().then(function(d) { throw new Error(d.detail || "上传失败"); });
+      }
+      return res.json();
+    }).then(function(data) {
+      if (data.headshot) set("avatar", toFullUrl(data.headshot));
+      toast("头像上传成功", true);
+      closeModal();
+      loadProfile();
+    }).catch(function(e) { toast(e.message); });
+  };
+  input.click();
+}
+
+async function saveProfile(isEdit) {
+  var body = {
+    name: document.getElementById("p-name").value.trim() || null,
+    age: document.getElementById("p-age").value ? parseInt(document.getElementById("p-age").value) : null
+  };
+  try {
+    if (isEdit) {
+      await request("/profile/", {method: "PUT", body: body});
+      toast("保存成功", true);
+    } else {
+      await request("/profile/", {method: "POST", body: body});
+      toast("创建成功", true);
+    }
+    closeModal();
+    loadProfile();
+  } catch (e) { toast(e.message); }
+}
+
+// ============ 评论 ============
+function toggleComments(targetType, targetId) {
+  const root = document.getElementById("comments-" + targetType + "-" + targetId);
+  if (!root) return;
+  if (root.innerHTML) { root.innerHTML = ""; return; }
+  root.innerHTML = '<div class="meta">评论加载中...</div>';
+  request("/comment/list?target_type=" + targetType + "&target_id=" + targetId + "&skip=0&limit=100").then(function(list) {
+    var html = '<div class="meta">— 评论区（' + list.length + '） —</div>';
+    if (list.length) {
+      html += list.map(function(c) {
+        return `
+          <div class="item" style="margin-top:6px; padding:8px; background:#fafafa;">
+            <div class="meta">${fmtDate(c.created_at)}</div>
+            <div class="content">${escapeHtml(c.content)}</div>
+            <div class="actions">
+              <button class="small danger" onclick="deleteComment(${c.id}, '${targetType}', ${targetId})">删除</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+    html += '<textarea id="nc-' + targetType + '-' + targetId + '" placeholder="写评论..." style="min-height:60px; margin-top:8px;"></textarea>';
+    html += '<button class="small" onclick="postComment(\'' + targetType + '\', ' + targetId + ')">发送</button>';
+    root.innerHTML = html;
+  }).catch(function(e) {
+    root.innerHTML = '<div class="meta">评论加载失败：' + e.message + '</div>';
+  });
+}
+
+async function postComment(targetType, targetId) {
+  const el = document.getElementById("nc-" + targetType + "-" + targetId);
+  const content = el.value.trim();
+  if (!content) { toast("评论内容不能为空"); return; }
+  try {
+    await request("/comment/", {method: "POST", body: {target_type: targetType, target_id: targetId, content: content}});
+    toast("评论成功", true);
+    toggleComments(targetType, targetId);
+  } catch (e) { toast(e.message); }
+}
+
+async function deleteComment(commentId, targetType, targetId) {
+  if (!confirm("删除这条评论？")) return;
+  try {
+    await request("/comment/" + commentId, {method: "DELETE"});
+    toast("删除成功", true);
+    toggleComments(targetType, targetId);
+  } catch (e) { toast(e.message); }
+}
+
+// ============ 启动 ============
+render();
+</script>
+</body>
+</html>
