@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # AI 对话（OpenAI 兼容接口，支持 DeepSeek / Qwen / OpenAI 等）
+    AI_API_KEY: str = ""
+    AI_BASE_URL: str = "https://api.deepseek.com/v1"
+    AI_MODEL: str = "deepseek-chat"
+    AI_TIMEOUT: int = 30
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

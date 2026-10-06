@@ -25,6 +25,7 @@ from api.user import router as user_router
 from api.diaries import router as diaries_router
 from api.goal import router as goal_router
 from api.comment import router as comment_router
+from api.ai import router as ai_router
 from db.session import engine, Base
 import models.models  # noqa: F401  确保所有模型被导入注册
 
@@ -104,6 +105,7 @@ app.include_router(user_router)
 app.include_router(diaries_router)
 app.include_router(goal_router)
 app.include_router(comment_router)
+app.include_router(ai_router)
 
 # 静态文件服务：头像上传目录
 static_dir = project_root / "static"

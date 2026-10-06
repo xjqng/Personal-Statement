@@ -94,6 +94,24 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
   - **入库前清洗**，存储型 XSS 在落库时即被拦截
 - **文件上传**：类型与大小校验 + UUID 重命名，防路径遍历
 
+## AI 写作助手
+
+右下角悬浮 ✨ 按钮打开 AI 聊天面板，支持：
+
+- **场景感知**：打开日记/目标/资料表单时对话，AI 自动匹配写作风格
+- **一键填入**：AI 回复下方点击「填入标题」或「填入内容」即可写入对应表单字段
+- **多模型兼容**：后端对接 OpenAI 兼容接口（DeepSeek / Qwen / OpenAI 均可）
+
+配置 `.env`：
+
+```env
+AI_API_KEY=sk-xxxx          # 你的 API Key
+AI_BASE_URL=https://api.deepseek.com/v1
+AI_MODEL=deepseek-chat
+```
+
+未配置 `AI_API_KEY` 时接口返回 503，不影响其他功能。
+
 ## 开发约定
 
 - `api` 层只做参数接收与依赖注入

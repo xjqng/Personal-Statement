@@ -48,11 +48,60 @@
   .avatar-preview { max-width: 120px; max-height: 120px; border-radius: 50%; margin-top: 8px; border: 2px solid #d2d2d7; }
   .file-input { display: none; }
   label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; margin-top: 4px; }
+
+  /* ============ AI 助手 ============ */
+  .ai-fab {
+    position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px;
+    border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff; font-size: 24px; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 16px rgba(102,126,234,0.4); cursor: pointer; z-index: 300;
+    border: none; transition: transform 0.2s;
+  }
+  .ai-fab:hover { transform: scale(1.1); }
+  .ai-panel {
+    position: fixed; bottom: 90px; right: 24px; width: 360px; max-width: calc(100vw - 48px);
+    height: 480px; max-height: calc(100vh - 140px);
+    background: #fff; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    display: flex; flex-direction: column; z-index: 301; overflow: hidden;
+  }
+  .ai-panel-header {
+    background: linear-gradient(135deg, #667eea, #764ba2); color: #fff;
+    padding: 12px 16px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;
+  }
+  .ai-panel-close { background: rgba(255,255,255,0.2); border: none; color: #fff; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 14px; }
+  .ai-messages { flex: 1; overflow-y: auto; padding: 12px; background: #f7f7fb; }
+  .ai-msg { margin-bottom: 12px; max-width: 85%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .ai-msg.user { background: #667eea; color: #fff; margin-left: auto; border-bottom-right-radius: 2px; }
+  .ai-msg.ai { background: #fff; color: #1d1d1f; border: 1px solid #e8e8ed; border-bottom-left-radius: 2px; }
+  .ai-msg.ai .ai-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .ai-msg.ai .ai-actions button { font-size: 11px; padding: 3px 8px; background: #e8e8ed; color: #1d1d1f; border: none; border-radius: 4px; cursor: pointer; }
+  .ai-msg.ai .ai-actions button:hover { background: #dcdce1; }
+  .ai-input-area { padding: 10px; border-top: 1px solid #e8e8ed; display: flex; gap: 8px; }
+  .ai-input-area textarea { flex: 1; resize: none; min-height: 36px; max-height: 100px; border: 1px solid #d2d2d7; border-radius: 8px; padding: 8px; font-size: 13px; }
+  .ai-input-area button { padding: 0 16px; border: none; border-radius: 8px; background: #667eea; color: #fff; cursor: pointer; font-size: 13px; }
+  .ai-input-area button:disabled { background: #c7c7cc; cursor: not-allowed; }
+  .ai-typing { color: #86867b; font-size: 12px; padding: 4px 12px; }
 </style>
 </head>
 <body>
 <div class="container" id="app"></div>
 <div id="toast"></div>
+
+<!-- AI 助手 -->
+<button class="ai-fab" id="aiFab" title="AI 写作助手" onclick="toggleAIPanel()">✨</button>
+<div class="ai-panel" id="aiPanel" style="display:none;">
+  <div class="ai-panel-header">
+    <span>✨ AI 写作助手</span>
+    <button class="ai-panel-close" onclick="toggleAIPanel()">×</button>
+  </div>
+  <div class="ai-messages" id="aiMessages">
+    <div class="ai-msg ai">你好！我可以帮你写日记、拟目标、润色文字。打开日记或目标表单后告诉我需求，生成后点击「插入」即可填入。</div>
+  </div>
+  <div class="ai-input-area">
+    <textarea id="aiInput" placeholder="例如：帮我写一篇关于周末爬山的日记..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
+    <button id="aiSendBtn" onclick="sendAIMessage()">发送</button>
+  </div>
+</div>
 
 <script>
 const API = "http://127.0.0.1:8000";
@@ -656,6 +705,103 @@ async function deleteComment(commentId, targetType, targetId) {
     toast("删除成功", true);
     toggleComments(targetType, targetId);
   } catch (e) { toast(e.message); }
+}
+
+// ============ AI 写作助手 ============
+function toggleAIPanel() {
+  var panel = document.getElementById("aiPanel");
+  if (panel.style.display === "none") {
+    panel.style.display = "flex";
+    document.getElementById("aiInput").focus();
+  } else {
+    panel.style.display = "none";
+  }
+}
+
+// 检测当前打开的表单，返回 {type, titleEl, contentEl}
+function detectActiveForm() {
+  if (document.getElementById("f-content")) {
+    return { type: "diary", titleEl: "f-title", contentEl: "f-content" };
+  }
+  if (document.getElementById("g-desc")) {
+    return { type: "goal", titleEl: "g-title", contentEl: "g-desc" };
+  }
+  if (document.getElementById("p-name")) {
+    return { type: "profile", titleEl: "p-name", contentEl: null };
+  }
+  return null;
+}
+
+function addAIMessage(role, text) {
+  var container = document.getElementById("aiMessages");
+  var div = document.createElement("div");
+  div.className = "ai-msg " + role;
+  div.textContent = text;
+  if (role === "ai") {
+    var form = detectActiveForm();
+    if (form) {
+      var actions = document.createElement("div");
+      actions.className = "ai-actions";
+      if (form.titleEl) {
+        var btnTitle = document.createElement("button");
+        btnTitle.textContent = "填入标题";
+        btnTitle.onclick = function() { insertToField(form.titleEl, text); };
+        actions.appendChild(btnTitle);
+      }
+      if (form.contentEl) {
+        var btnContent = document.createElement("button");
+        btnContent.textContent = "填入内容";
+        btnContent.onclick = function() { insertToField(form.contentEl, text); };
+        actions.appendChild(btnContent);
+      }
+      div.appendChild(actions);
+    }
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function insertToField(elId, text) {
+  var el = document.getElementById(elId);
+  if (!el) { toast("表单已关闭，请重新打开"); return; }
+  el.value = text;
+  el.focus();
+  toast("已填入", true);
+}
+
+var aiSending = false;
+async function sendAIMessage() {
+  var input = document.getElementById("aiInput");
+  var msg = input.value.trim();
+  if (!msg || aiSending) return;
+
+  var form = detectActiveForm();
+  var context = form ? form.type : "";
+
+  addAIMessage("user", msg);
+  input.value = "";
+  aiSending = true;
+  document.getElementById("aiSendBtn").disabled = true;
+
+  var typing = document.createElement("div");
+  typing.className = "ai-typing";
+  typing.textContent = "AI 正在思考...";
+  document.getElementById("aiMessages").appendChild(typing);
+
+  try {
+    var data = await request("/ai/chat", {
+      method: "POST",
+      body: { message: msg, context: context }
+    });
+    typing.remove();
+    addAIMessage("ai", data.reply);
+  } catch (e) {
+    typing.remove();
+    addAIMessage("ai", "抱歉，AI 服务出错：" + e.message);
+  } finally {
+    aiSending = false;
+    document.getElementById("aiSendBtn").disabled = false;
+  }
 }
 
 // ============ 启动 ============
